@@ -1,0 +1,159 @@
+@startuml
+left to right direction
+skinparam actorStyle awesome
+
+' ============================
+' ACTEURS
+' ============================
+
+actor "Internaute\n(non connecté)" as Guest
+actor "Internaute\n(connecté)" as User
+actor "Conducteur" as Driver
+
+User <|-- Driver
+
+' ============================
+' CAS D'UTILISATION
+' ============================
+
+rectangle "Application CERICar" {
+  
+  ' --- Gestion des comptes ---
+  usecase (Créer un compte) as UC_Register
+  usecase (Se connecter) as UC_Login
+  usecase (Se déconnecter) as UC_Logout
+  
+  ' --- Recherche de voyages ---
+  usecase (Rechercher un voyage) as UC_Search
+  usecase (Consulter résultats) as UC_ViewResults
+  
+  ' --- Réservation + Paiement ---
+  usecase (Réserver + Payer) as UC_Book
+  usecase (Consulter mes réservations) as UC_MyBookings
+  usecase (Annuler une réservation) as UC_CancelBooking
+  
+  ' --- Avis (bonus) ---
+  usecase (Noter un conducteur) as UC_RateDriver
+  usecase (Consulter mes avis reçus) as UC_ViewMyRatings
+  
+  ' --- Proposition de voyages (Conducteur) ---
+  usecase (Proposer un voyage) as UC_Offer
+  usecase (Consulter mes voyages proposés) as UC_MyOffers
+  usecase (Supprimer un voyage) as UC_DeleteOffer
+}
+
+' ============================
+' RELATIONS ACTEURS ↔ USE CASES
+' ============================
+
+' --- Internaute non connecté ---
+Guest --> UC_Register
+Guest --> UC_Login
+Guest --> UC_Search
+Guest --> UC_ViewResults
+
+' --- Internaute connecté ---
+User --> UC_Search
+User --> UC_ViewResults
+User --> UC_Book
+User --> UC_MyBookings
+User --> UC_CancelBooking
+User --> UC_Logout
+User --> UC_RateDriver
+
+' --- Conducteur (hérite de User) ---
+Driver --> UC_Offer
+Driver --> UC_MyOffers
+Driver --> UC_DeleteOffer
+Driver --> UC_ViewMyRatings
+
+' ============================
+' RELATIONS ENTRE USE CASES
+' ============================
+
+UC_Book ..> UC_Login : <<require>>
+UC_Offer ..> UC_Login : <<require>>
+UC_ViewResults ..> UC_Search : <<include>>
+UC_RateDriver ..> UC_Login : <<require>>
+
+' ============================
+' NOTES
+' ============================
+
+note right of Driver
+  Un conducteur est un internaute
+  ayant renseigné un numéro de permis
+  lors de la création du compte.
+  
+  Un conducteur peut aussi réserver
+  des voyages en tant que voyageur.
+end note
+
+note bottom of UC_Search
+  Critères de recherche :
+  - Ville de départ
+  - Ville d'arrivée
+  - Nombre de personnes
+  - Accepter correspondances (oui/non)
+  
+  Trajet entier dure maximum 24h
+end note
+
+note bottom of UC_Book
+  **Flux atomique réservation + paiement** :
+  
+  1. Vérifications :
+     ✓ Places disponibles suffisantes
+     ✓ Durée trajet <= 24h
+     ✓ Contraintes affichées (pas de filtres)
+  
+  2. Redirection Stripe Checkout
+  
+  3. Paiement carte bancaire
+  
+  4. **SI paiement OK** :
+     - Webhook Stripe → INSERT reservation
+     - Confirmation affichée
+  
+  5. **SI paiement KO** :
+     - Rien en BDD
+     - Message d'erreur
+end note
+
+note bottom of UC_RateDriver
+  **Noter un conducteur** (bonus) :
+  
+  - Disponible après voyage effectué
+  - Note 1-5 étoiles (obligatoire)
+  - Commentaire optionnel
+  - 1 seul avis par voyageur par voyage
+  
+  Enregistré dans table "avis"
+end note
+
+note bottom of UC_ViewMyRatings
+  **Consulter mes avis reçus** (conducteur) :
+  
+  - Affichage note moyenne globale
+  - Liste de tous les avis :
+    * Note (étoiles)
+    * Commentaire
+    * Voyage concerné
+end note
+
+note bottom of UC_Offer
+  Le conducteur propose un voyage
+  sur un trajet direct existant.
+  
+  Informations requises :
+  - Trajet (pré-défini)
+  - Type véhicule
+  - Marque véhicule
+  - Tarif (€/km/voyageur)
+  - Heure de départ
+  - Nb places dispo
+  - Nb bagages autorisés
+  - Contraintes (affichées dans résultats)
+end note
+
+@enduml

@@ -1,0 +1,140 @@
+@startuml
+skinparam state {
+  BackgroundColor LightBlue
+  BorderColor Black
+  ArrowColor DarkBlue
+}
+
+title Diagramme d'états-transitions - CERICar (avec Stripe)
+
+' ============================
+' ÉTATS DE RESERVATION
+' ============================
+
+state "États de Reservation" as ResStates {
+  
+  [*] --> Validée : paiement_stripe_success()
+  
+  Validée : Réservation confirmée et payée
+  Validée : - voyage_id, voyageur_id, nbplaceresa
+  Validée : - Places définitivement bloquées (nbplacedispo--)
+  
+  Validée --> Annulée : annuler_reservation()
+  
+  Annulée : Réservation annulée (remboursée)
+  Annulée : - Restitution places (nbplacedispo++)
+  
+  Validée --> [*]
+  Annulée --> [*]
+}
+
+' ============================
+' ÉTATS DE VOYAGE
+' ============================
+
+state "États de Voyage" as VoyStates {
+  [*] --> Disponible : proposer_voyage()
+  
+  Disponible : Voyage visible dans recherche
+  Disponible : - nbplacedispo > 0
+  
+  Disponible --> Complet : reservation_validee() [nbplacedispo == 0]
+  Disponible --> Supprimé : supprimer_voyage()
+  
+  Complet : Plus de places disponibles
+  Complet : - Non visible dans résultats recherche
+  
+  Complet --> Disponible : annulation_reservation() [nbplacedispo > 0]
+  Complet --> Supprimé : supprimer_voyage()
+  
+  Supprimé : Voyage retiré par conducteur
+  Supprimé : - Toutes réservations annulées automatiquement
+  
+  Supprimé --> [*]
+}
+
+' ============================
+' NOTES EXPLICATIVES
+' ============================
+
+note right of Validée
+  **État unique** :
+  La réservation existe en BDD SEULEMENT
+  si le paiement Stripe a réussi.
+  
+  **Pas d'état "En_Attente"** car :
+  - Stripe gère le paiement AVANT la création
+  - Si paiement OK → INSERT reservation
+  - Si paiement KO → rien en BDD
+  
+  **Pas d'état "Effectuée"** car :
+  - Pas de gestion de dates
+  - Simplification du projet
+  
+  **Vérifications automatiques** :
+  ✓ nbplacedispo >= nbplaceresa
+  ✓ Durée trajet <= 24h
+  ✓ Contraintes affichées (pas de filtres)
+end note
+
+note bottom of Annulée
+  **Remboursement automatique Stripe** :
+  Lors de l'annulation :
+  1. DELETE reservation (suppression BDD)
+  2. Appel API Stripe (refund)
+  3. Restitution places (nbplacedispo++)
+  4. Si Voyage était "Complet" → "Disponible"
+end note
+
+note right of Disponible
+  **Transition automatique** :
+  Disponible → Complet
+  quand nbplacedispo atteint 0
+  après validation d'une réservation.
+  
+  Complet → Disponible
+  si une réservation est annulée
+  et nbplacedispo redevient > 0.
+end note
+
+note bottom of Supprimé
+  **Cascade d'annulations** :
+  Quand un conducteur supprime un voyage :
+  1. Toutes réservations → supprimées (DELETE)
+  2. Remboursements Stripe automatiques
+  3. Notifications envoyées aux voyageurs (optionnel)
+end note
+
+' ============================
+' FLUX PAIEMENT STRIPE (HORS BDD)
+' ============================
+
+note as N1
+  **Flux complet avec vérifications** :
+  
+  1. User clique "Réserver X places"
+  
+  2. **Vérifications côté serveur** :
+     ✓ nbplacedispo >= nbplaceresa
+     ✓ Durée trajet total <= 24h (si correspondances)
+     ✓ Contraintes affichées dans page trajet
+  
+  3. Calcul coût total (tarif × distance × nbplaceresa)
+  
+  4. Redirection Stripe Checkout
+  
+  5. User paie (carte bancaire)
+  
+  6. **SI paiement OK** :
+     - Webhook Stripe appelle notre serveur
+     - INSERT INTO reservation (voyage, voyageur, nbplaceresa)
+     - UPDATE voyage SET nbplacedispo = nbplacedispo - nbplaceresa
+     - État logique : **Validée**
+  
+  7. **SI paiement KO** :
+     - Rien en BDD (pas de réservation créée)
+     - Message d'erreur à l'utilisateur
+     - Places restent disponibles
+end note
+
+@enduml

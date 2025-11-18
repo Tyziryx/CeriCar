@@ -1,0 +1,164 @@
+@startuml
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+
+' ============================
+' CLASSES PRINCIPALES (tables prof)
+' ============================
+
+class Internaute {
+  + id : int <<PK>>
+  --
+  + pseudo : string
+  + pass : string
+  + nom : string
+  + prenom : string
+  + mail : string
+  + photo : string
+  + permis : string
+}
+
+class Voyage {
+  + id : int <<PK>>
+  --
+  + conducteur : int <<FK>>
+  + trajet : int <<FK>>
+  + idtypev : int <<FK>>
+  + idmarquev : int <<FK>>
+  + tarif : float
+  + nbplacedispo : int
+  + nbbagage : int
+  + heuredepart : time
+  + contraintes : string
+}
+
+class Reservation {
+  + id : int <<PK>>
+  --
+  + voyage : int <<FK>>
+  + voyageur : int <<FK>>
+  + nbplaceresa : int
+}
+
+class Trajet {
+  + id : int <<PK>>
+  --
+  + depart : string
+  + arrivee : string
+  + distance : int
+}
+
+class TypeVehicule {
+  + id : int <<PK>>
+  --
+  + typev : string
+}
+
+class MarqueVehicule {
+  + id : int <<PK>>
+  --
+  + marquev : string
+}
+
+' ============================
+' NOUVELLE CLASSE (mon espace)
+' ============================
+
+class Avis {
+  + id : int <<PK>>
+  --
+  + voyageur : int <<FK>>
+  + conducteur : int <<FK>>
+  + voyage : int <<FK>>
+  + note : int {1-5}
+  + commentaire : text
+}
+
+' ============================
+' RELATIONS
+' ============================
+
+Internaute "1" -- "0..*" Voyage : propose >
+Internaute "1" -- "0..*" Reservation : effectue >
+Internaute "1 (voyageur)" -- "0..*" Avis : donne >
+Internaute "1 (conducteur)" -- "0..*" Avis : reçoit >
+
+Voyage "0..*" -- "1" Trajet : concerne >
+Voyage "0..*" -- "1" TypeVehicule : utilise >
+Voyage "0..*" -- "1" MarqueVehicule : possède >
+Voyage "1" -- "0..*" Reservation : contient >
+Voyage "1" -- "0..*" Avis : concerne >
+
+Reservation "1" -- "0..1" Avis : peut_générer >
+
+' ============================
+' NOTES
+' ============================
+
+note top of Internaute
+  Table : internaute (CRUD - prof)
+  
+  Règle métier :
+  Si permis ≠ NULL → Conducteur , mais un conducteur peut aussi etre un voyageur , 
+  mais un voyageur ne pas pas forcément etre un conducteur 
+  
+  **Méthode bonus** :
+  getNoteMoyenne() : float
+  (calcule moyenne notes reçues)
+end note
+
+note top of Voyage
+  Table : voyage (CRUD - prof)
+  
+  Règle métier :
+  - 1 voyage = 1 trajet direct
+  - Correspondances gérées en recherche
+  
+  Colonnes FK :
+  - conducteur → internaute.id
+  - trajet → trajet.id
+  - idtypev → typevehicule.id
+  - idmarquev → marquevehicule.id
+end note
+
+note right of Trajet
+  Table : trajet (R - prof)
+  
+  Simplification :
+  durée (min) = distance (km)
+end note
+
+note bottom of Reservation
+  Table : reservation (CRUD - prof)
+  
+  **Logique paiement Stripe** :
+      Si reservation critères sont ok 
+      debut paiement :  si paiement validé reservation validé
+      sinon non 
+  
+Stripe Gère normalement le remboursement etc ( a voir ) 
+end note
+
+note bottom of Avis
+  **Table Avis (a crée sur mon espace )** : avis
+  
+  Règles  :
+  - Notation possible SEULEMENT après heure arrivée
+    (heuredepart + distance en minutes < heure actuelle)
+  - 1 avis par voyageur par voyage (UNIQUE)
+  - Note 1-5 (obligatoire)
+  - Commentaire (optionnel)
+  
+  **Conservation historique** :
+  - Les voyages terminés RESTENT en BDD
+  - Impossible de supprimer un voyage si avis existent
+  - Le conducteur voit sur quel voyage il a été noté
+    grâce à la FK voyage_id
+  
+  Colonnes FK :
+  - voyageur → internaute.id
+  - conducteur → internaute.id
+  - voyage → voyage.id 
+end note
+
+@enduml

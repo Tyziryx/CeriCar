@@ -1,0 +1,73 @@
+@startuml
+title Diagramme de séquence - Recherche voyage avec affichage notes conducteurs
+
+actor "Internaute" as User
+participant "Interface Web" as UI
+participant "RechercheController" as Controller
+participant "Voyage" as VoyageModel
+participant "Trajet" as TrajetModel
+participant "Internaute" as InternauteModel
+participant "Avis" as AvisModel
+database "Base de données" as DB
+
+User -> UI : Saisit critères recherche\n(depart, arrivee, nbPersonnes)
+activate UI
+
+UI -> Controller : rechercherVoyages(depart, arrivee, nbPersonnes)
+activate Controller
+
+Controller -> TrajetModel : findTrajet(depart, arrivee)
+activate TrajetModel
+TrajetModel -> DB : SELECT * FROM trajet\nWHERE depart=? AND arrivee=?
+activate DB
+DB --> TrajetModel : trajet_id, distance
+deactivate DB
+TrajetModel --> Controller : Trajet
+deactivate TrajetModel
+
+Controller -> VoyageModel : findVoyagesDisponibles(trajet_id, nbPersonnes)
+activate VoyageModel
+VoyageModel -> DB : SELECT * FROM voyage\nWHERE trajet=? AND nbplacedispo >= ?
+activate DB
+DB --> VoyageModel : Liste voyages
+deactivate DB
+VoyageModel --> Controller : Voyage[]
+deactivate VoyageModel
+
+loop Pour chaque voyage
+  Controller -> InternauteModel : getConducteur(voyage.conducteur)
+  activate InternauteModel
+  InternauteModel -> DB : SELECT * FROM internaute WHERE id=?
+  activate DB
+  DB --> InternauteModel : conducteur
+  deactivate DB
+  InternauteModel --> Controller : Internaute
+  deactivate InternauteModel
+  
+  Controller -> AvisModel : getNoteMoyenne(conducteur_id)
+  activate AvisModel
+  AvisModel -> DB : SELECT AVG(note) FROM avis\nWHERE conducteur=?
+  activate DB
+  DB --> AvisModel : note_moyenne (ex: 4.5)
+  deactivate DB
+  AvisModel --> Controller : note_moyenne
+  deactivate AvisModel
+  
+  Controller -> Controller : calculerCoutTotal(voyage, trajet, nbPersonnes)
+  note right
+    coût = tarif × distance × nbPersonnes
+  end note
+  
+  Controller -> Controller : calculerHeureArrivee(heuredepart, distance)
+  note right
+    heureArrivee = heuredepart + distance (min)
+  end note
+end
+
+Controller --> UI : ResultatRecherche[]\n(voyages, conducteurs, notes, coûts, horaires, contraintes)
+deactivate Controller
+
+UI --> User : Affiche résultats\n- Conducteur: Bob (★★★★☆ 4.5/5)\n- Contraintes: "Pas de fumeur"\n- Tarif: 28.84€ pour 2 pers\n- Horaires: 14h00 → 20h52
+deactivate UI
+
+@enduml
